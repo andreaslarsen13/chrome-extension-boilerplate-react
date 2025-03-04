@@ -1,150 +1,109 @@
-<img src="src/assets/img/icon-128.png" width="64"/>
+# Internet Assistant Chrome Extension
 
-# Chrome Extension (MV3) Boilerplate with React 18 and Webpack 5
-
-[![npm](https://img.shields.io/npm/v/chrome-extension-boilerplate-react)](https://www.npmjs.com/package/chrome-extension-boilerplate-react)
-[![npm-download](https://img.shields.io/npm/dw/chrome-extension-boilerplate-react)](https://www.npmjs.com/package/chrome-extension-boilerplate-react)
-[![npm](https://img.shields.io/npm/dm/chrome-extension-boilerplate-react)](https://www.npmjs.com/package/chrome-extension-boilerplate-react)
-
-## Announcements
-
-- Recently updated from **[React](https://reactjs.org)** ~~17~~ to **18**!
-- **_This boilerplate adopts [Manifest V3](https://developer.chrome.com/docs/extensions/mv3/intro/mv3-overview/)!_**
-  - For V2 users, please check out the [manifest-v2](https://github.com/lxieyang/chrome-extension-boilerplate-react/tree/manifest-v2) branch, or use version [3.x](https://www.npmjs.com/package/chrome-extension-boilerplate-react/v/3.3.0).
-  - Check out the [Manifest V3 Migration Guide](https://developer.chrome.com/docs/extensions/mv3/intro/mv3-migration/).
-- Recently added [devtools](https://developer.chrome.com/docs/extensions/mv3/devtools/) Support! Thanks [GeekaholicLin](https://github.com/lxieyang/chrome-extension-boilerplate-react/issues/17)!
-- Recently updated from **[Webpack Dev Server](https://webpack.js.org/configuration/dev-server/)** ~~3.x~~ to **4.x** and **[Webpack](https://webpack.js.org/)** ~~4~~ to **5**!
-- Recently added [TypeScript](https://www.typescriptlang.org/) Support!
+A helpful Chrome extension that provides information and assistance while browsing the web.
 
 ## Features
 
-This is a basic Chrome Extensions boilerplate to help you write modular and modern Javascript code, load CSS easily and [automatic reload the browser on code changes](https://webpack.github.io/docs/webpack-dev-server.html#automatic-refresh).
+- **Chat Interface**: Ask questions and get helpful responses in a clean chat interface
+- **Page Analysis**: The assistant can analyze the content of the current page
+- **Text Highlighting**: Highlight important information on the webpage
+- **In-Page Assistant**: Launch the assistant directly on the webpage for easier interaction
+- **Twitter Usage Limiter**: Helps reduce time spent on Twitter/X by setting daily limits
 
-This boilerplate is updated with:
+## Installation
 
-- [Chrome Extension Manifest V3](https://developer.chrome.com/docs/extensions/mv3/intro/mv3-overview/)
-- [React 18](https://reactjs.org)
-- [Webpack 5](https://webpack.js.org/)
-- [Webpack Dev Server 4](https://webpack.js.org/configuration/dev-server/)
-- [React Refresh](https://www.npmjs.com/package/react-refresh)
-- [react-refresh-webpack-plugin](https://github.com/pmmmwh/react-refresh-webpack-plugin)
-- [eslint-config-react-app](https://www.npmjs.com/package/eslint-config-react-app)
-- [Prettier](https://prettier.io/)
-- [TypeScript](https://www.typescriptlang.org/)
+### Development Mode
 
-This boilerplate is heavily inspired by and adapted from [https://github.com/samuelsimoes/chrome-extension-webpack-boilerplate](https://github.com/samuelsimoes/chrome-extension-webpack-boilerplate), with additional support for React 18 features, Webpack 5, and Webpack Dev Server 4.
+1. Clone this repository
+   ```
+   git clone https://github.com/yourusername/internet-assistant.git
+   ```
 
-Please open up an issue to nudge me to keep the npm packages up-to-date. FYI, it takes time to make different packages with different versions work together nicely.
+2. Install dependencies
+   ```
+   npm install
+   ```
 
-## Installing and Running
+3. Build the extension
+   ```
+   npm run build
+   ```
 
-### Procedures:
+4. Load the extension in Chrome:
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" in the top-right corner
+   - Click "Load unpacked" and select the `build` folder from this project
 
-1. Check if your [Node.js](https://nodejs.org/) version is >= **18**.
-2. Clone this repository.
-3. Change the package's `name`, `description`, and `repository` fields in `package.json`.
-4. Change the name of your extension on `src/manifest.json`.
-5. Run `npm install` to install the dependencies.
-6. Run `npm start`
-7. Load your extension on Chrome following:
-   1. Access `chrome://extensions/`
-   2. Check `Developer mode`
-   3. Click on `Load unpacked extension`
-   4. Select the `build` folder.
-8. Happy hacking.
+### Development with Hot Reload
 
-## Structure
-
-All your extension's code must be placed in the `src` folder.
-
-The boilerplate is already prepared to have a popup, an options page, a background page, and a new tab page (which replaces the new tab page of your browser). But feel free to customize these.
-
-## TypeScript
-
-This boilerplate now supports TypeScript! The `Options` Page is implemented using TypeScript. Please refer to `src/pages/Options/` for example usages.
-
-## Webpack auto-reload and HRM
-
-To make your workflow much more efficient this boilerplate uses the [webpack server](https://webpack.github.io/docs/webpack-dev-server.html) to development (started with `npm start`) with auto reload feature that reloads the browser automatically every time that you save some file in your editor.
-
-You can run the dev mode on other port if you want. Just specify the env var `port` like this:
+For development with hot reload:
 
 ```
-$ PORT=6002 npm run start
+npm start
 ```
 
-## Content Scripts
+This will start the webpack dev server and automatically reload the extension when you make changes.
 
-Although this boilerplate uses the webpack dev server, it's also prepared to write all your bundles files on the disk at every code change, so you can point, on your extension manifest, to your bundles that you want to use as [content scripts](https://developer.chrome.com/extensions/content_scripts), but you need to exclude these entry points from hot reloading [(why?)](https://github.com/samuelsimoes/chrome-extension-webpack-boilerplate/issues/4#issuecomment-261788690). To do so you need to expose which entry points are content scripts on the `webpack.config.js` using the `chromeExtensionBoilerplate -> notHotReload` config. Look the example below.
+## Usage
 
-Let's say that you want use the `myContentScript` entry point as content script, so on your `webpack.config.js` you will configure the entry point and exclude it from hot reloading, like this:
+1. Click on the Internet Assistant icon in your Chrome toolbar to open the popup
+2. Type your question or request in the input field and press Enter or click Send
+3. To launch the assistant directly on the webpage, click the "Launch Assistant on Page" button
 
-```js
-{
-  …
-  entry: {
-    myContentScript: "./src/js/myContentScript.js"
-  },
-  chromeExtensionBoilerplate: {
-    notHotReload: ["myContentScript"]
-  }
-  …
-}
+### Twitter Usage Limiter
+
+The Twitter Usage Limiter helps you manage your time on Twitter/X with a structured system:
+
+- **Daily Limit**: 15 minutes per day on Twitter/X
+- **Usage Tracking**: Shows remaining time in the top-right corner of Twitter
+- **Cooldown System**: When you reach your daily limit, Twitter is blocked for 15 minutes
+- **Bonus Visits**: After each cooldown period, you get one 2-minute bonus visit
+- **Strict Enforcement**: If you leave Twitter during a bonus visit or use up the 2 minutes, Twitter is blocked again for 15 minutes
+- **Daily Reset**: All usage limits reset at midnight each day
+
+How the cycle works:
+1. You get 15 minutes of Twitter usage per day
+2. When you reach this limit, Twitter is blocked for 15 minutes
+3. After the cooldown ends, you get one 2-minute bonus visit
+4. After using the bonus visit, Twitter is blocked for another 15 minutes
+5. This cycle of "15-minute cooldown → 2-minute bonus visit" repeats throughout the day
+
+## Commands
+
+The assistant can respond to various commands, including:
+
+- General questions about the webpage content
+- Requests to highlight specific text on the page
+- Questions about the information on the current page
+
+## Technical Details
+
+This extension is built with:
+
+- React 18
+- TypeScript
+- Webpack 5
+- Chrome Extension Manifest V3
+
+## Project Structure
+
+```
+src/
+├── assets/          # Images and other static assets
+├── pages/
+│   ├── Background/  # Background script
+│   ├── Content/     # Content scripts injected into webpages
+│   │   └── modules/
+│   │       └── twitterTimer.js  # Twitter usage limiting functionality
+│   ├── Popup/       # Popup UI
+│   └── Options/     # Options page
+└── manifest.json    # Extension manifest
 ```
 
-and on your `src/manifest.json`:
+## Contributing
 
-```json
-{
-  "content_scripts": [
-    {
-      "matches": ["https://www.google.com/*"],
-      "js": ["myContentScript.bundle.js"]
-    }
-  ]
-}
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Intelligent Code Completion
+## License
 
-Thanks to [@hudidit](https://github.com/lxieyang/chrome-extension-boilerplate-react/issues/4)'s kind suggestions, this boilerplate supports chrome-specific intelligent code completion using [@types/chrome](https://www.npmjs.com/package/@types/chrome).
-
-## Packing
-
-After the development of your extension run the command
-
-```
-$ NODE_ENV=production npm run build
-```
-
-Now, the content of `build` folder will be the extension ready to be submitted to the Chrome Web Store. Just take a look at the [official guide](https://developer.chrome.com/webstore/publish) to more infos about publishing.
-
-## Secrets
-
-If you are developing an extension that talks with some API you probably are using different keys for testing and production. Is a good practice you not commit your secret keys and expose to anyone that have access to the repository.
-
-To this task this boilerplate import the file `./secrets.<THE-NODE_ENV>.js` on your modules through the module named as `secrets`, so you can do things like this:
-
-_./secrets.development.js_
-
-```js
-export default { key: '123' };
-```
-
-_./src/popup.js_
-
-```js
-import secrets from 'secrets';
-ApiCall({ key: secrets.key });
-```
-
-:point_right: The files with name `secrets.*.js` already are ignored on the repository.
-
-## Resources:
-
-- [Webpack documentation](https://webpack.js.org/concepts/)
-- [Chrome Extension documentation](https://developer.chrome.com/extensions/getstarted)
-
----
-
-Michael Xieyang Liu | [Website](https://lxieyang.github.io)
+This project is licensed under the MIT License - see the LICENSE file for details.

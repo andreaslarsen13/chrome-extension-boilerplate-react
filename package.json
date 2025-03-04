@@ -1,11 +1,11 @@
 {
-  "name": "chrome-extension-boilerplate-react",
-  "version": "5.0.4",
-  "description": "A chrome extension boilerplate built with React 18, Webpack 5, and Webpack Dev Server 4",
+  "name": "internet-assistant",
+  "version": "1.0.0",
+  "description": "A helpful assistant that provides information and assistance while browsing the web",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lxieyang/chrome-extension-boilerplate-react.git"
+    "url": "https://github.com/yourusername/internet-assistant.git"
   },
   "scripts": {
     "build": "node utils/build.js",
