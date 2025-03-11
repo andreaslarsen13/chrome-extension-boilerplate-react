@@ -88,13 +88,17 @@
     width: 100%;
     height: 100%;
     background-color: rgba(29, 161, 242, 0.95);
-    z-index: 10000;
+    z-index: 2147483647 !important;
+    /* Maximum z-index value */
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     color: white;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    pointer-events: all !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 #twitter-timer-overlay .container {
@@ -104,12 +108,16 @@
     max-width: 500px;
     text-align: center;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    pointer-events: all !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 #twitter-timer-overlay h1 {
     color: #1DA1F2;
     margin: 0 0 16px 0;
     font-size: 24px;
+    font-weight: bold;
 }
 
 #twitter-timer-overlay p {
@@ -119,11 +127,27 @@
     line-height: 1.5;
 }
 
+#twitter-timer-overlay .timer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 24px 0;
+}
+
+#twitter-timer-overlay .timer-label {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 8px;
+}
+
 #twitter-timer-overlay .timer {
     font-size: 36px;
     font-weight: bold;
     color: #1DA1F2;
-    margin: 24px 0;
+    background-color: #f5f8fa;
+    padding: 12px 24px;
+    border-radius: 8px;
+    min-width: 120px;
 }
 
 /* Usage Stats */
@@ -133,25 +157,65 @@
     right: 10px;
     background-color: white;
     border-radius: 8px;
-    padding: 10px;
+    padding: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    z-index: 9999;
+    z-index: 2147483646 !important;
+    /* Just below the overlay */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 12px;
     color: #333;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
+    min-width: 200px;
+    pointer-events: all !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 #twitter-usage-stats .time-left {
     font-weight: bold;
     color: #1DA1F2;
+    font-size: 14px;
+}
+
+#twitter-usage-stats .daily-limit {
+    font-size: 12px;
+    color: #333;
 }
 
 #twitter-usage-stats .visit-count {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+#twitter-usage-stats .progress-container {
+    margin-top: 8px;
+}
+
+#twitter-usage-stats .progress-label {
     font-size: 11px;
     color: #666;
+    margin-bottom: 4px;
+}
+
+#twitter-usage-stats .progress-bar {
+    height: 6px;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#twitter-usage-stats .progress-fill {
+    height: 100%;
+    background-color: #1DA1F2;
+    border-radius: 3px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+#twitter-usage-stats .progress-fill.bonus {
+    background-color: #34C759;
 }
 
 /* Error message styles */
@@ -164,7 +228,8 @@
     border-radius: 8px;
     padding: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    z-index: 9999;
+    z-index: 2147483645 !important;
+    /* High z-index but below other elements */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 12px;
     color: #d32f2f;
@@ -172,6 +237,9 @@
     flex-direction: column;
     gap: 5px;
     max-width: 300px;
+    pointer-events: all !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .twitter-timer-error .error-title {

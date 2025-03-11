@@ -15,7 +15,8 @@ const TWITTER_STORAGE_KEYS = {
     LAST_RESET_DATE: 'twitter_last_reset_date',
     LIMIT_REACHED: 'twitter_limit_reached',
     BONUS_VISIT_ACTIVE: 'twitter_bonus_visit_active',
-    BONUS_VISIT_START: 'twitter_bonus_visit_start'
+    BONUS_VISIT_START: 'twitter_bonus_visit_start',
+    USAGE_LOGS: 'twitter_usage_logs'
 };
 
 /**
@@ -147,7 +148,8 @@ async function handleGetTwitterStats(sendResponse) {
             TWITTER_STORAGE_KEYS.COOLDOWN_UNTIL,
             TWITTER_STORAGE_KEYS.LIMIT_REACHED,
             TWITTER_STORAGE_KEYS.BONUS_VISIT_ACTIVE,
-            TWITTER_STORAGE_KEYS.BONUS_VISIT_START
+            TWITTER_STORAGE_KEYS.BONUS_VISIT_START,
+            TWITTER_STORAGE_KEYS.USAGE_LOGS
         ]);
 
         sendResponse({
@@ -158,7 +160,8 @@ async function handleGetTwitterStats(sendResponse) {
                 cooldownUntil: data[TWITTER_STORAGE_KEYS.COOLDOWN_UNTIL] || null,
                 limitReached: data[TWITTER_STORAGE_KEYS.LIMIT_REACHED] || false,
                 bonusVisitActive: data[TWITTER_STORAGE_KEYS.BONUS_VISIT_ACTIVE] || false,
-                bonusVisitStart: data[TWITTER_STORAGE_KEYS.BONUS_VISIT_START] || null
+                bonusVisitStart: data[TWITTER_STORAGE_KEYS.BONUS_VISIT_START] || null,
+                usageLogs: data[TWITTER_STORAGE_KEYS.USAGE_LOGS] || []
             }
         });
     } catch (error) {

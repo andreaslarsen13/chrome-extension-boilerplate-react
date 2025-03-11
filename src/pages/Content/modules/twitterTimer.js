@@ -5,7 +5,7 @@
 
 // Constants
 const DAILY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes in milliseconds
-const COOLDOWN_PERIOD_MS = 15 * 60 * 1000; // 15 minutes cooldown (changed from 10)
+const COOLDOWN_PERIOD_MS = 10 * 60 * 1000; // 10 minutes cooldown
 const BONUS_VISIT_LIMIT_MS = 2 * 60 * 1000; // 2 minutes for bonus visit
 const TWITTER_DOMAINS = ['twitter.com', 'x.com'];
 
@@ -18,11 +18,32 @@ const STORAGE_KEYS = {
     LAST_RESET_DATE: 'twitter_last_reset_date',
     LIMIT_REACHED: 'twitter_limit_reached',
     BONUS_VISIT_ACTIVE: 'twitter_bonus_visit_active',
-    BONUS_VISIT_START: 'twitter_bonus_visit_start'
+    BONUS_VISIT_START: 'twitter_bonus_visit_start',
+    USAGE_LOGS: 'twitter_usage_logs' // New key for usage analytics
 };
 
 // Global interval reference
 let checkInterval = null;
+
+// Force reset for testing
+(async function forceResetForTesting() {
+    try {
+        console.log('Twitter Timer: Forcing reset for testing');
+        await safeStorageSet({
+            [STORAGE_KEYS.DAILY_USAGE]: 0,
+            [STORAGE_KEYS.VISIT_COUNT]: 0,
+            [STORAGE_KEYS.LAST_RESET_DATE]: Date.now(),
+            [STORAGE_KEYS.SESSION_START]: Date.now(),
+            [STORAGE_KEYS.LIMIT_REACHED]: false,
+            [STORAGE_KEYS.BONUS_VISIT_ACTIVE]: false,
+            [STORAGE_KEYS.BONUS_VISIT_START]: null,
+            [STORAGE_KEYS.COOLDOWN_UNTIL]: null
+        });
+        console.log('Twitter Timer: Reset complete');
+    } catch (error) {
+        console.error('Error forcing reset:', error);
+    }
+})();
 
 /**
  * Safe wrapper for chrome.storage.local.get to handle extension context invalidation
@@ -83,13 +104,17 @@ export const initTwitterTimer = async () => {
         if (!isTwitterSite()) return;
 
         console.log('Twitter Timer: Initializing on Twitter/X');
+        console.log(`Twitter Timer: Daily limit set to 15 minutes`);
+        console.log(`Twitter Timer: Cooldown period set to 10 minutes`);
+        console.log(`Twitter Timer: Bonus visit limit set to 2 minutes`);
 
-        // Reset usage if it's a new day
-        await checkAndResetDailyUsage();
-
-        // Check if we're in a cooldown period
+        // IMPORTANT: Check for cooldown immediately before anything else loads
+        // This prevents users from refreshing to bypass the cooldown
         const cooldownUntil = await getCooldownTime();
         if (cooldownUntil && Date.now() < cooldownUntil) {
+            // Block the page content immediately
+            blockTwitterContent();
+
             // Check if we should allow a bonus visit
             const data = await safeStorageGet([
                 STORAGE_KEYS.BONUS_VISIT_ACTIVE,
@@ -103,12 +128,16 @@ export const initTwitterTimer = async () => {
                 // Allow one bonus visit after cooldown
                 console.log('Twitter Timer: Starting bonus visit (2 minutes)');
                 await startBonusVisit();
+                unblockTwitterContent();
             } else {
                 // Show cooldown overlay
                 showCooldownOverlay(cooldownUntil);
                 return;
             }
         }
+
+        // Reset usage if it's a new day
+        await checkAndResetDailyUsage();
 
         // Create and show usage stats
         createUsageStatsElement();
@@ -122,7 +151,7 @@ export const initTwitterTimer = async () => {
         const bonusVisitActive = data[STORAGE_KEYS.BONUS_VISIT_ACTIVE] || false;
 
         if (bonusVisitActive) {
-            // We're in a bonus visit - start the 2-minute timer
+            // We're in a bonus visit - start the timer
             const bonusVisitStart = data[STORAGE_KEYS.BONUS_VISIT_START] || Date.now();
             const timeElapsed = Date.now() - bonusVisitStart;
 
@@ -197,9 +226,16 @@ async function trackVisit() {
  */
 async function startBonusVisit() {
     try {
+        const bonusVisitStart = Date.now();
         await safeStorageSet({
             [STORAGE_KEYS.BONUS_VISIT_ACTIVE]: true,
-            [STORAGE_KEYS.BONUS_VISIT_START]: Date.now()
+            [STORAGE_KEYS.BONUS_VISIT_START]: bonusVisitStart
+        });
+
+        // Log the bonus visit event
+        await logUsageEvent('bonus_visit_started', {
+            bonusVisitStart,
+            bonusVisitDuration: BONUS_VISIT_LIMIT_MS
         });
     } catch (error) {
         console.error('Error starting bonus visit:', error);
@@ -217,10 +253,26 @@ async function startBonusVisit() {
  */
 async function endBonusVisit() {
     try {
+        const bonusVisitData = await safeStorageGet([STORAGE_KEYS.BONUS_VISIT_START]);
+        const bonusVisitStart = bonusVisitData[STORAGE_KEYS.BONUS_VISIT_START] || null;
+
         await safeStorageSet({
             [STORAGE_KEYS.BONUS_VISIT_ACTIVE]: false,
             [STORAGE_KEYS.BONUS_VISIT_START]: null
         });
+
+        // Log the bonus visit ended event
+        if (bonusVisitStart) {
+            const bonusVisitDuration = Date.now() - bonusVisitStart;
+            await logUsageEvent('bonus_visit_ended', {
+                bonusVisitStart,
+                bonusVisitDuration,
+                actualDuration: bonusVisitDuration
+            });
+        }
+
+        // Block content immediately
+        blockTwitterContent();
 
         // Start the cooldown
         await startCooldown();
@@ -271,6 +323,143 @@ function startBonusVisitTimer(startTime) {
 }
 
 /**
+ * Create the usage stats element
+ */
+function createUsageStatsElement() {
+    try {
+        // Remove any existing stats element
+        const existingStats = document.getElementById('twitter-usage-stats');
+        if (existingStats) {
+            existingStats.remove();
+        }
+
+        // Create stats container
+        const statsContainer = document.createElement('div');
+        statsContainer.id = 'twitter-usage-stats';
+
+        // Create time left element
+        const timeLeftElement = document.createElement('div');
+        timeLeftElement.className = 'time-left';
+        timeLeftElement.textContent = 'Loading...';
+
+        // Create daily limit element
+        const dailyLimitElement = document.createElement('div');
+        dailyLimitElement.className = 'daily-limit';
+        dailyLimitElement.textContent = 'Daily limit: 15 minutes';
+
+        // Check if we're in a bonus visit
+        safeStorageGet([
+            STORAGE_KEYS.BONUS_VISIT_ACTIVE,
+            STORAGE_KEYS.DAILY_USAGE,
+            STORAGE_KEYS.VISIT_COUNT
+        ]).then(data => {
+            try {
+                const bonusVisitActive = data[STORAGE_KEYS.BONUS_VISIT_ACTIVE] || false;
+                const dailyUsage = data[STORAGE_KEYS.DAILY_USAGE] || 0;
+                const visitCount = data[STORAGE_KEYS.VISIT_COUNT] || 0;
+
+                // Create status element
+                const statusElement = document.createElement('div');
+                statusElement.className = 'visit-count';
+
+                if (bonusVisitActive) {
+                    statusElement.textContent = 'Bonus visit (2 minutes max)';
+                    statusElement.style.color = '#34C759'; // Green for bonus
+
+                    // Add a progress element for bonus time
+                    const progressElement = document.createElement('div');
+                    progressElement.className = 'progress-container';
+                    progressElement.innerHTML = `
+                        <div class="progress-label">Bonus time remaining:</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill bonus"></div>
+                        </div>
+                    `;
+                    statsContainer.appendChild(progressElement);
+                } else {
+                    // Show regular visit info
+                    statusElement.textContent = `Regular visit (${visitCount} visits today)`;
+
+                    // Add a progress element for daily usage
+                    const progressElement = document.createElement('div');
+                    progressElement.className = 'progress-container';
+
+                    // Calculate percentage used
+                    const percentUsed = Math.min(100, (dailyUsage / DAILY_LIMIT_MS) * 100);
+
+                    progressElement.innerHTML = `
+                        <div class="progress-label">Daily usage:</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${percentUsed}%"></div>
+                        </div>
+                    `;
+                    statsContainer.appendChild(progressElement);
+                }
+
+                // Add elements to container
+                statsContainer.appendChild(timeLeftElement);
+                statsContainer.appendChild(dailyLimitElement);
+                statsContainer.appendChild(statusElement);
+
+                // Add container to page
+                document.body.appendChild(statsContainer);
+            } catch (error) {
+                console.error('Error creating usage stats UI:', error);
+            }
+        }).catch(error => {
+            console.error('Error getting bonus visit status:', error);
+        });
+    } catch (error) {
+        console.error('Error creating usage stats element:', error);
+    }
+}
+
+/**
+ * Update the usage stats display
+ * @param {number} timeSpent - Time spent in milliseconds
+ */
+function updateUsageStats(timeSpent) {
+    try {
+        const statsContainer = document.getElementById('twitter-usage-stats');
+        if (!statsContainer) return;
+
+        const timeLeftElement = statsContainer.querySelector('.time-left');
+        if (!timeLeftElement) return;
+
+        const timeLeftMs = Math.max(0, DAILY_LIMIT_MS - timeSpent);
+        const minutes = Math.floor(timeLeftMs / 60000);
+        const seconds = Math.floor((timeLeftMs % 60000) / 1000);
+
+        timeLeftElement.textContent = `Time left: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        // Change color when time is running out
+        if (timeLeftMs < 60000) { // Less than 1 minute
+            timeLeftElement.style.color = '#FF3B30';
+        } else if (timeLeftMs < 300000) { // Less than 5 minutes
+            timeLeftElement.style.color = '#FF9500';
+        } else {
+            timeLeftElement.style.color = '#1DA1F2';
+        }
+
+        // Update progress bar if it exists
+        const progressFill = statsContainer.querySelector('.progress-fill:not(.bonus)');
+        if (progressFill) {
+            const percentUsed = Math.min(100, (timeSpent / DAILY_LIMIT_MS) * 100);
+            progressFill.style.width = `${percentUsed}%`;
+
+            // Change color based on percentage
+            if (percentUsed > 80) {
+                progressFill.style.backgroundColor = '#FF3B30';
+            } else if (percentUsed > 60) {
+                progressFill.style.backgroundColor = '#FF9500';
+            }
+        }
+    } catch (error) {
+        console.error('Error updating usage stats:', error);
+    }
+}
+
+/**
  * Update the UI to show bonus visit time
  */
 function updateBonusVisitStats(timeLeftMs) {
@@ -284,7 +473,7 @@ function updateBonusVisitStats(timeLeftMs) {
         const minutes = Math.floor(timeLeftMs / 60000);
         const seconds = Math.floor((timeLeftMs % 60000) / 1000);
 
-        timeLeftElement.textContent = `Bonus visit: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        timeLeftElement.textContent = `Bonus time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
 
         // Change color when time is running out
         if (timeLeftMs < 30000) { // Less than 30 seconds
@@ -293,6 +482,20 @@ function updateBonusVisitStats(timeLeftMs) {
             timeLeftElement.style.color = '#FF9500';
         } else {
             timeLeftElement.style.color = '#34C759'; // Green for bonus time
+        }
+
+        // Update bonus progress bar if it exists
+        const bonusProgressFill = statsContainer.querySelector('.progress-fill.bonus');
+        if (bonusProgressFill) {
+            const percentLeft = (timeLeftMs / BONUS_VISIT_LIMIT_MS) * 100;
+            bonusProgressFill.style.width = `${percentLeft}%`;
+
+            // Change color based on time left
+            if (percentLeft < 30) {
+                bonusProgressFill.style.backgroundColor = '#FF3B30';
+            } else if (percentLeft < 50) {
+                bonusProgressFill.style.backgroundColor = '#FF9500';
+            }
         }
     } catch (error) {
         console.error('Error updating bonus visit stats:', error);
@@ -323,6 +526,15 @@ function startTimeCheckInterval() {
                     await safeStorageSet({
                         [STORAGE_KEYS.LIMIT_REACHED]: true
                     });
+
+                    // Log the limit reached event
+                    await logUsageEvent('limit_reached', {
+                        timeSpent,
+                        dailyLimit: DAILY_LIMIT_MS
+                    });
+
+                    // Block content immediately
+                    blockTwitterContent();
 
                     await startCooldown();
                 }
@@ -383,8 +595,17 @@ async function handleVisibilityChange() {
  */
 async function checkAndResetDailyUsage() {
     try {
-        const data = await safeStorageGet([STORAGE_KEYS.LAST_RESET_DATE]);
+        const data = await safeStorageGet([
+            STORAGE_KEYS.LAST_RESET_DATE,
+            STORAGE_KEYS.DAILY_USAGE,
+            STORAGE_KEYS.VISIT_COUNT,
+            STORAGE_KEYS.LIMIT_REACHED
+        ]);
+
         const lastResetDate = data[STORAGE_KEYS.LAST_RESET_DATE] || 0;
+        const dailyUsage = data[STORAGE_KEYS.DAILY_USAGE] || 0;
+        const visitCount = data[STORAGE_KEYS.VISIT_COUNT] || 0;
+        const limitReached = data[STORAGE_KEYS.LIMIT_REACHED] || false;
 
         const today = new Date();
         const lastResetDay = new Date(lastResetDate);
@@ -392,6 +613,17 @@ async function checkAndResetDailyUsage() {
         // Reset if it's a new day
         if (today.toDateString() !== lastResetDay.toDateString()) {
             console.log('Twitter Timer: New day, resetting usage');
+
+            // Log the daily summary before resetting
+            await logUsageEvent('daily_summary', {
+                date: lastResetDay.toISOString(),
+                totalUsageMs: dailyUsage,
+                totalUsageMinutes: Math.round(dailyUsage / 60000 * 10) / 10,
+                visitCount,
+                limitReached
+            });
+
+            // Reset all values
             await safeStorageSet({
                 [STORAGE_KEYS.DAILY_USAGE]: 0,
                 [STORAGE_KEYS.VISIT_COUNT]: 0,
@@ -399,7 +631,13 @@ async function checkAndResetDailyUsage() {
                 [STORAGE_KEYS.SESSION_START]: Date.now(), // Reset session start on a new day
                 [STORAGE_KEYS.LIMIT_REACHED]: false, // Reset limit reached flag
                 [STORAGE_KEYS.BONUS_VISIT_ACTIVE]: false, // Reset bonus visit flag
-                [STORAGE_KEYS.BONUS_VISIT_START]: null // Reset bonus visit start time
+                [STORAGE_KEYS.BONUS_VISIT_START]: null, // Reset bonus visit start time
+                [STORAGE_KEYS.COOLDOWN_UNTIL]: null // Reset cooldown time
+            });
+
+            // Log the daily reset event
+            await logUsageEvent('daily_reset', {
+                resetTime: Date.now()
             });
         }
     } catch (error) {
@@ -468,6 +706,42 @@ async function getTimeSpentToday() {
 }
 
 /**
+ * Log a usage event for analytics
+ * @param {string} eventType - Type of event (e.g., 'limit_reached', 'cooldown_started', 'bonus_visit_started')
+ * @param {Object} data - Additional data to log
+ */
+async function logUsageEvent(eventType, data = {}) {
+    try {
+        const timestamp = Date.now();
+        const storedLogs = await safeStorageGet([STORAGE_KEYS.USAGE_LOGS]);
+        const logs = storedLogs[STORAGE_KEYS.USAGE_LOGS] || [];
+
+        // Create the log entry
+        const logEntry = {
+            timestamp,
+            date: new Date(timestamp).toISOString(),
+            eventType,
+            ...data
+        };
+
+        // Add to logs array (limit to last 100 events to prevent storage issues)
+        logs.push(logEntry);
+        if (logs.length > 100) {
+            logs.shift(); // Remove oldest log if we exceed 100
+        }
+
+        // Save updated logs
+        await safeStorageSet({
+            [STORAGE_KEYS.USAGE_LOGS]: logs
+        });
+
+        console.log(`Twitter Timer: Logged event - ${eventType}`, logEntry);
+    } catch (error) {
+        console.error('Error logging usage event:', error);
+    }
+}
+
+/**
  * Start the cooldown period
  */
 async function startCooldown() {
@@ -477,6 +751,12 @@ async function startCooldown() {
 
         await safeStorageSet({
             [STORAGE_KEYS.COOLDOWN_UNTIL]: cooldownUntil
+        });
+
+        // Log the cooldown event
+        await logUsageEvent('cooldown_started', {
+            cooldownUntil,
+            cooldownDuration: COOLDOWN_PERIOD_MS
         });
 
         showCooldownOverlay(cooldownUntil);
@@ -506,87 +786,79 @@ async function getCooldownTime() {
 }
 
 /**
- * Create the usage stats element
+ * Block Twitter content by hiding the main content and showing a blocking overlay
  */
-function createUsageStatsElement() {
-    try {
-        // Remove any existing stats element
-        const existingStats = document.getElementById('twitter-usage-stats');
-        if (existingStats) {
-            existingStats.remove();
+function blockTwitterContent() {
+    // First, hide all content
+    const style = document.createElement('style');
+    style.id = 'twitter-timer-block-style';
+    style.textContent = `
+        body > div:not(#twitter-timer-overlay):not(#twitter-usage-stats):not(.twitter-timer-error) {
+            display: none !important;
         }
+        body {
+            overflow: hidden !important;
+            background-color: #f7f9fa !important;
+        }
+    `;
+    document.head.appendChild(style);
 
-        // Create stats container
-        const statsContainer = document.createElement('div');
-        statsContainer.id = 'twitter-usage-stats';
+    // Set up a mutation observer to ensure content stays blocked
+    setupBlockingObserver();
+}
 
-        // Create time left element
-        const timeLeftElement = document.createElement('div');
-        timeLeftElement.className = 'time-left';
-        timeLeftElement.textContent = 'Loading...';
+/**
+ * Unblock Twitter content by removing the blocking style
+ */
+function unblockTwitterContent() {
+    const blockStyle = document.getElementById('twitter-timer-block-style');
+    if (blockStyle) {
+        blockStyle.remove();
+    }
 
-        // Check if we're in a bonus visit
-        safeStorageGet([STORAGE_KEYS.BONUS_VISIT_ACTIVE]).then(data => {
-            try {
-                const bonusVisitActive = data[STORAGE_KEYS.BONUS_VISIT_ACTIVE] || false;
-
-                // Create status element
-                const statusElement = document.createElement('div');
-                statusElement.className = 'visit-count';
-
-                if (bonusVisitActive) {
-                    statusElement.textContent = 'Bonus visit (2 min max)';
-                    statusElement.style.color = '#34C759'; // Green for bonus
-                } else {
-                    statusElement.textContent = 'Regular visit (15 min daily limit)';
-                }
-
-                // Add elements to container
-                statsContainer.appendChild(timeLeftElement);
-                statsContainer.appendChild(statusElement);
-
-                // Add container to page
-                document.body.appendChild(statsContainer);
-            } catch (error) {
-                console.error('Error creating usage stats UI:', error);
-            }
-        }).catch(error => {
-            console.error('Error getting bonus visit status:', error);
-        });
-    } catch (error) {
-        console.error('Error creating usage stats element:', error);
+    // Remove the observer
+    if (window.twitterBlockingObserver) {
+        window.twitterBlockingObserver.disconnect();
+        window.twitterBlockingObserver = null;
     }
 }
 
 /**
- * Update the usage stats display
- * @param {number} timeSpent - Time spent in milliseconds
+ * Set up a mutation observer to ensure Twitter content stays blocked
+ * This prevents scripts from removing our blocking overlay
  */
-function updateUsageStats(timeSpent) {
-    try {
-        const statsContainer = document.getElementById('twitter-usage-stats');
-        if (!statsContainer) return;
-
-        const timeLeftElement = statsContainer.querySelector('.time-left');
-        if (!timeLeftElement) return;
-
-        const timeLeftMs = Math.max(0, DAILY_LIMIT_MS - timeSpent);
-        const minutes = Math.floor(timeLeftMs / 60000);
-        const seconds = Math.floor((timeLeftMs % 60000) / 1000);
-
-        timeLeftElement.textContent = `Time left: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-        // Change color when time is running out
-        if (timeLeftMs < 60000) { // Less than 1 minute
-            timeLeftElement.style.color = '#FF3B30';
-        } else if (timeLeftMs < 300000) { // Less than 5 minutes
-            timeLeftElement.style.color = '#FF9500';
-        } else {
-            timeLeftElement.style.color = '#1DA1F2';
-        }
-    } catch (error) {
-        console.error('Error updating usage stats:', error);
+function setupBlockingObserver() {
+    // Disconnect any existing observer
+    if (window.twitterBlockingObserver) {
+        window.twitterBlockingObserver.disconnect();
     }
+
+    // Create a new observer
+    window.twitterBlockingObserver = new MutationObserver((mutations) => {
+        // Check if our blocking style was removed
+        const blockStyle = document.getElementById('twitter-timer-block-style');
+        if (!blockStyle) {
+            // Re-add the blocking style
+            blockTwitterContent();
+        }
+
+        // Check if our overlay was removed
+        const overlay = document.getElementById('twitter-timer-overlay');
+        if (!overlay) {
+            // Get the cooldown time and re-show the overlay if needed
+            getCooldownTime().then(cooldownUntil => {
+                if (cooldownUntil && Date.now() < cooldownUntil) {
+                    showCooldownOverlay(cooldownUntil);
+                }
+            });
+        }
+    });
+
+    // Start observing
+    window.twitterBlockingObserver.observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
 }
 
 /**
@@ -595,6 +867,9 @@ function updateUsageStats(timeSpent) {
  */
 function showCooldownOverlay(cooldownUntil) {
     try {
+        // Block the Twitter content
+        blockTwitterContent();
+
         // Remove any existing overlay
         const existingOverlay = document.getElementById('twitter-timer-overlay');
         if (existingOverlay) {
@@ -611,15 +886,34 @@ function showCooldownOverlay(cooldownUntil) {
 
         // Create header
         const header = document.createElement('h1');
-        header.textContent = 'Time to take a break from Twitter';
+        header.textContent = 'Daily Twitter Limit Reached';
 
         // Create message
         const message = document.createElement('p');
-        message.textContent = "You've reached your time limit on Twitter. After this cooldown period, you'll get a 2-minute bonus visit.";
+        message.innerHTML = `
+            <strong>You've reached your 15-minute daily Twitter limit.</strong><br>
+            Twitter is now blocked for a 10-minute cooldown period.<br>
+            After this cooldown, you'll get a brief 2-minute bonus window.<br>
+            This cycle (cooldown → bonus access) will continue until midnight.<br>
+            <strong>Note: Refreshing the page will not bypass this limit.</strong>
+        `;
+
+        // Create timer container
+        const timerContainer = document.createElement('div');
+        timerContainer.className = 'timer-container';
+
+        // Create timer label
+        const timerLabel = document.createElement('div');
+        timerLabel.className = 'timer-label';
+        timerLabel.textContent = 'Cooldown ends in:';
 
         // Create timer
         const timer = document.createElement('div');
         timer.className = 'timer';
+
+        // Add timer elements to container
+        timerContainer.appendChild(timerLabel);
+        timerContainer.appendChild(timer);
 
         // Update timer every second
         const updateTimer = () => {
@@ -633,6 +927,7 @@ function showCooldownOverlay(cooldownUntil) {
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
                     overlay.remove();
+                    unblockTwitterContent();
                     window.location.reload();
                 }
             } catch (error) {
@@ -646,7 +941,7 @@ function showCooldownOverlay(cooldownUntil) {
         // Add elements to container
         container.appendChild(header);
         container.appendChild(message);
-        container.appendChild(timer);
+        container.appendChild(timerContainer);
 
         // Add container to overlay
         overlay.appendChild(container);
@@ -711,4 +1006,4 @@ function showErrorMessage(errorMessage, isTemporary = true) {
             errorContainer.remove();
         }, 10000);
     }
-} 
+}
